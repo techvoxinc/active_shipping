@@ -3,9 +3,9 @@ script: bundle exec rake test
 sudo: false
 
 rvm:
-- "2.2.2"
-- "2.3.1"
-- "2.4.0"
+- "2.3.8"
+- "2.4.10"
+
 
 gemfile:
 - gemfiles/activesupport42.gemfile
