@@ -5,7 +5,7 @@ module ActiveShipping
     cattr_reader :name
     @@name = "Kunaki"
 
-    URL = 'http://Kunaki.com/XMLService.ASP'
+    URL = 'https://Kunaki.com/XMLService.ASP'
 
     CARRIERS = ["UPS", "USPS", "FedEx", "Royal Mail", "Parcelforce", "Pharos", "Eurotrux", "Canada Post", "DHL"]
 

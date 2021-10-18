@@ -50,16 +50,17 @@ module ActiveShipping
   # @!attribute destination
   #   @return [ActiveShipping::Location]
   class TrackingResponse < Response
-    attr_reader :carrier,:carrier_name,
-                :status,:status_code, :status_description,
+    attr_reader :carrier, :carrier_name, :service_code,
+                :status, :status_code, :status_description,
                 :ship_time, :scheduled_delivery_date, :actual_delivery_date, :attempted_delivery_date,
                 :delivery_signature, :tracking_number, :shipment_events,
-                :shipper_address, :origin, :destination
+                :shipper_address, :origin, :destination, :packages
 
     # @params (see ActiveShipping::Response#initialize)
     def initialize(success, message, params = {}, options = {})
       @carrier = options[:carrier].parameterize.to_sym
       @carrier_name = options[:carrier]
+      @service_code = options[:service_code]
       @status = options[:status]
       @status_code = options[:status_code]
       @status_description = options[:status_description]
@@ -73,6 +74,7 @@ module ActiveShipping
       @shipper_address = options[:shipper_address]
       @origin = options[:origin]
       @destination = options[:destination]
+      @packages = options[:packages]
       super
     end
 
@@ -86,6 +88,10 @@ module ActiveShipping
     # @return [Boolean]
     def is_delivered?
       @status == :delivered
+    end
+
+    def all_delivered?
+      packages.all? { |package| package.is_delivered? }
     end
 
     # Returns `true` if something out of the ordinary has happened during

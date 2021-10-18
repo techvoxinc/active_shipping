@@ -9,9 +9,9 @@ module ActiveShipping
     attr_reader :last_swsim_method
 
     # TODO: Update to latest API. Documentation for the latest WSDL version is available here: http://support.stamps.com/outgoing/swsimv39doc.zip
-    LIVE_URL = 'https://swsim.stamps.com/swsim/swsimv34.asmx'
-    TEST_URL = 'https://swsim.testing.stamps.com/swsim/swsimv34.asmx'
-    NAMESPACE = 'http://stamps.com/xml/namespace/2014/01/swsim/swsimv34'
+    LIVE_URL = 'https://swsim.stamps.com/swsim/swsimv84.asmx'
+    TEST_URL = 'https://swsim.testing.stamps.com/swsim/swsimv84.asmx'
+    NAMESPACE = 'http://stamps.com/xml/namespace/2019/09/swsim/SwsimV84'
 
     REQUIRED_OPTIONS = [:integration_id, :username, :password].freeze
 
@@ -167,6 +167,16 @@ module ActiveShipping
       commit(:TrackShipment, request)
     end
 
+    def cancel_shipment(shipment_id, options = {})
+      request = build_cancel_indicium_request(shipment_id, options)
+      commit(:CancelIndicium, request)
+    end
+
+    def create_manifest(shipment_ids, origin, options = {})
+      request = build_create_manifest_request(shipment_ids, origin, options)
+      commit(:CreateManifest, request)
+    end
+
     def namespace
       NAMESPACE
     end
@@ -226,7 +236,7 @@ module ActiveShipping
                  'xmlns:soap' => 'http://schemas.xmlsoap.org/soap/envelope/',
                  'xmlns:xsi'  => 'http://www.w3.org/2001/XMLSchema-instance',
                  'xmlns:xsd'  => 'http://www.w3.org/2001/XMLSchema',
-                 'xmlns:tns'  => 'http://stamps.com/xml/namespace/2014/01/swsim/swsimv34'
+                 'xmlns:tns'  =>  NAMESPACE
                 ) do
           xml['soap'].Body do
             yield(xml)
@@ -295,8 +305,8 @@ module ActiveShipping
           xml['tns'].State(       address.state) unless address.state.blank?
 
           zip = (address.postal_code || '').match(/^(\d{5})?-?(\d{4})?$/)
-          xml['tns'].ZIPCode(     zip[1]) unless zip[1].nil?
-          xml['tns'].ZIPCodeAddOn(zip[2]) unless zip[2].nil?
+          xml['tns'].ZIPCode(     zip[1]) unless zip.nil? || zip[1].nil?
+          xml['tns'].ZIPCodeAddOn(zip[2]) unless zip.nil? || zip[2].nil?
         else
           xml['tns'].Province(    address.province) unless address.province.blank?
           xml['tns'].PostalCode(  address.postal_code) unless address.postal_code.blank?
@@ -351,7 +361,7 @@ module ActiveShipping
         unless add_ons.empty?
           xml['tns'].AddOns do
             add_ons.each do |add_on|
-              xml['tns'].AddOnV5 do
+              xml['tns'].AddOnV15 do
                 xml['tns'].AddOnType(add_on)
               end
             end
@@ -447,16 +457,48 @@ module ActiveShipping
       end
     end
 
+    def build_cancel_indicium_request(shipment_id, options)
+      build_header do |xml|
+        xml['tns'].CancelIndicium do
+          xml['tns'].Authenticator(authenticator)
+          xml['tns'].public_send(options[:stamps_tx_id] ? :StampsTxID : :TrackingNumber, shipment_id)
+        end
+      end
+    end
+
+    def build_create_manifest_request(shipment_ids, origin, options)
+      build_header do |xml|
+        xml['tns'].CreateManifest do
+          xml['tns'].Authenticator(authenticator)
+          xml['tns'].IntegratorTxID(options[:integrator_tx_id] || SecureRandom::uuid)
+          xml['tns'].public_send(options[:stamps_tx_ids] ? :StampsTxIDs : :TrackingNumbers) do
+            [shipment_ids].flatten.map { |shipment_id| xml['tns'].string(shipment_id) }
+          end
+          add_address(xml, origin, :FromAddress)
+          xml['tns'].ImageType(options[:image_type]) unless options[:image_type].blank?
+          xml['tns'].PrintInstructions(options[:print_instructions].present?)
+          xml['tns'].ManifestType(options[:manifest_type]) unless options[:manifest_type].blank?
+        end
+      end
+    end
+
     def commit(swsim_method, request)
       save_request(request)
       save_swsim_method(swsim_method)
-      parse(ssl_post(request_url, request, 'Content-Type' => 'text/xml', 'SOAPAction' => soap_action(swsim_method)))
+      parse(ssl_post(request_url, request, request_headers(swsim_method)))
     rescue ActiveUtils::ResponseError => e
       parse(e.response.body)
     end
 
     def request_url
       test_mode? ? TEST_URL : LIVE_URL
+    end
+
+    def request_headers(swsim_method)
+      {
+        'Content-Type' => 'text/xml',
+        'SOAPAction' => soap_action(swsim_method)
+      }
     end
 
     def soap_action(method)
@@ -492,7 +534,9 @@ module ActiveShipping
       end
 
       # Renew the Authenticator if it has expired and retry the request
-      if error_code && error_code.downcase == '002b0202'
+      # Error code reference:
+      # http://developer.stamps.com/assets/documents/developer/downloads/Stamps.com_SWSIM_Reference_v42.pdf
+      if error_code && ['002b0202', '002b0203', '002b0204'].include?(error_code.downcase)
         request = renew_authenticator(last_request)
         commit(last_swsim_method, request)
       else
@@ -660,14 +704,14 @@ module ActiveShipping
 
     def parse_add_ons(rate)
       add_ons = {}
-      rate.xpath('AddOns/AddOnV5').each do |add_on|
+      rate.xpath('AddOns/AddOnV15').each do |add_on|
         add_on_type = add_on.at('AddOnType').text
 
         add_on_details = {}
         add_on_details[:missing_data] = parse_content(add_on, 'MissingData') if add_on.at('MissingData')
         add_on_details[:amount]       = parse_content(add_on, 'Amount') if add_on.at('Amount')
 
-        prohibited_with = add_on.xpath('ProhibitedWithAnyOf/AddOnTypeV5').map(&:text)
+        prohibited_with = add_on.xpath('ProhibitedWithAnyOf/AddOnTypeV15').map(&:text)
         add_on_details[:prohibited_with] = prohibited_with unless prohibited_with.empty?
 
         add_ons[add_on_type] = add_on_details
@@ -734,7 +778,7 @@ module ActiveShipping
           city:    event.at('City').text,
           state:   event.at('State').text,
           zip:     event.at('Zip').text,
-          country: event.at('Country').text
+          country: event.at('Country').text.presence || 'US'
         )
 
         ShipmentEvent.new(description, zoneless_time, location)
@@ -744,6 +788,30 @@ module ActiveShipping
       response_options[:delivered] = response_options[:status] == :delivered
 
       TrackingResponse.new(true, '', {}, response_options)
+    end
+
+    def parse_cancel_indicium_response(cancel_indicium, response_options)
+      parse_authenticator(cancel_indicium)
+
+      # Nothing on the response to return, will throw exception on error
+      true
+    end
+
+    def parse_create_manifest_response(create_manifest, response_options)
+      parse_authenticator(create_manifest)
+
+      manifests = create_manifest.xpath('EndOfDayManifests/EndOfDayManifest').map do |manifest|
+        carrier = manifest.at('PickupCarrier').text
+        type = manifest.at('ManifestType').text
+        id = manifest.at('ManifestId').text
+        url = manifest.at('ManifestUrl').text
+
+        Manifest.new(carrier, type, id, url)
+      end
+
+      response_options[:manifests] = manifests
+
+      StampsCreateManifestResponse.new(true, '', {}, response_options)
     end
 
     def parse_content(node, child)
@@ -855,6 +923,15 @@ module ActiveShipping
 
     def image
       @image_data ||= ssl_get(label_url)
+    end
+  end
+
+  class StampsCreateManifestResponse < Response
+    attr_reader :manifests
+
+    def initialize(success, message, params = {}, options = {})
+      super
+      @manifests = options[:manifests]
     end
   end
 end

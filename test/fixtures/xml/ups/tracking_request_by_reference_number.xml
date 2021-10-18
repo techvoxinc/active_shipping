@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<TrackRequest>
+  <Request>
+    <RequestAction>Track</RequestAction>
+    <RequestOption>1</RequestOption>
+  </Request>
+  <ReferenceNumber>
+    <Value>SF0287139422</Value>
+  </ReferenceNumber>
+  <ShipperNumber>origin</ShipperNumber>
+</TrackRequest>

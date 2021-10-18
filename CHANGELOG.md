@@ -1,8 +1,5 @@
 # ActiveShipping CHANGELOG
 
-### v2.2.0
-- Remove UPS integration from ActiveShipping repository as requested by UPS. For information about the UPS APIs see https://www.ups.com/upsdeveloperkit
-
 ### v2.1.1
 - Update README to clarify Shopify's involvement moving forward with v2.x
 
@@ -202,6 +199,7 @@
 * Add missing ISO countries [Edward Ocampo-Gooding]
 * Add support for Guernsey to country.rb [cody]
 * Use :words_connector instead of connector in RequiresParameters [cody]
+* Fix extra slash in UPS endpoints [cody]
 * Add name to Shipwire class [cody]
 * Improve FedEx handling of some error conditions [cody]
 * Add support for validating credentials to Shipwire [cody]
