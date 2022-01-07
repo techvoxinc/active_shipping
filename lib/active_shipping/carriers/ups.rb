@@ -1,3 +1,4 @@
+require 'pry'
 module ActiveShipping
   class UPS < Carrier
     self.retry_safe = true
@@ -679,7 +680,7 @@ module ActiveShipping
       #                   * Shipment/(Shipper|ShipTo|ShipFrom)/AttentionName element
       #                   * Shipment/(Shipper|ShipTo|ShipFrom)/TaxIdentificationNumber element
       xml.public_send(name) do
-        if shipper_name = (location.name || location.company_name || options[:origin_name])
+        if shipper_name = (location.company_name || location.name  || options[:origin_name])
           xml.Name(shipper_name)
         end
         xml.PhoneNumber(location.phone.gsub(/[^\d]/, '')) unless location.phone.blank?
