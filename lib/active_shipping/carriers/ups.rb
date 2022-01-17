@@ -1,4 +1,3 @@
-require 'pry'
 module ActiveShipping
   class UPS < Carrier
     self.retry_safe = true
