@@ -1,0 +1,27 @@
+# Dockerfile.legacy
+FROM ruby:2.6
+
+# 1. Install system dependencies required for old gems (Nokogiri, etc.)
+# We explicitly update sources to ensure we can fetch packages
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    libxml2-dev \
+    libxslt-dev \
+    cmake
+
+WORKDIR /build
+
+# 2. Clone the specific fork
+RUN git clone https://github.com/techvoxinc/active_shipping.git .
+
+# 3. AUTO-VERSIONING (Optional but Recommended)
+# This command finds the version.rb file and appends pre-release metadata 
+# (e.g., changing '1.14.2' to '1.14.2-shopvox'). 
+# This ensures your private gem doesn't conflict with the public one.
+RUN find lib -name "version.rb" -exec sed -i "s/VERSION = ['\"]\([^'\"]*\)['\"]/VERSION = '\1.shopvox'/" {} +
+
+# 4. Build the gem
+# We output the result to /pkg so it's easy to extract
+RUN mkdir /pkg
+CMD gem build *.gemspec && mv *.gem /pkg/
